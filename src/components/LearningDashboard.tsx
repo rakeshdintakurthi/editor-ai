@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
-import { Trophy, Target, Flame, Award, BookOpen, Code2, TrendingUp, Users } from 'lucide-react';
-import { gamificationService, UserProgress, UserProfile, Level, UserBadge, CareerTrack } from '../lib/gamification';
+import { Trophy, Target, Flame, Award, BookOpen, Code2, TrendingUp, Users, Star, Play } from 'lucide-react';
+import { gamificationService, UserProgress, UserProfile, Level, UserBadge, CareerTrack, UserStar, UserCourseProgress } from '../lib/gamification';
 
 interface LearningDashboardProps {
   userId: string;
@@ -13,6 +13,9 @@ export default function LearningDashboard({ userId }: LearningDashboardProps) {
   const [nextLevel, setNextLevel] = useState<Level | null>(null);
   const [badges, setBadges] = useState<UserBadge[]>([]);
   const [tracks, setTracks] = useState<CareerTrack[]>([]);
+  const [stars, setStars] = useState<UserStar[]>([]);
+  const [totalStars, setTotalStars] = useState<number>(0);
+  const [inProgressCourses, setInProgressCourses] = useState<{course: any, progress: UserCourseProgress}[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -21,17 +24,21 @@ export default function LearningDashboard({ userId }: LearningDashboardProps) {
 
   async function loadDashboardData() {
     try {
-      const [progressData, profileData, badgesData, tracksData] = await Promise.all([
+      const [progressData, profileData, badgesData, tracksData, starsData, totalStarsCount] = await Promise.all([
         gamificationService.getProgress(userId),
         gamificationService.getProfile(userId),
         gamificationService.getUserBadges(userId),
         gamificationService.getAllTracks(),
+        gamificationService.getUserStars(userId),
+        gamificationService.getTotalStars(userId),
       ]);
 
       setProgress(progressData);
       setProfile(profileData);
       setBadges(badgesData);
       setTracks(tracksData);
+      setStars(starsData);
+      setTotalStars(totalStarsCount);
 
       if (progressData) {
         const [current, next] = await Promise.all([
@@ -41,6 +48,19 @@ export default function LearningDashboard({ userId }: LearningDashboardProps) {
         setCurrentLevel(current);
         setNextLevel(next);
       }
+
+      const courses = await gamificationService.getAllTracks();
+      const coursesInProgress = [];
+      for (const track of courses.slice(0, 3)) {
+        const trackCourses = await gamificationService.getCoursesByTrack(track.id);
+        for (const course of trackCourses.slice(0, 2)) {
+          const courseProgress = await gamificationService.getUserCourseProgress(userId, course.id);
+          if (courseProgress && !courseProgress.completed_at) {
+            coursesInProgress.push({ course, progress: courseProgress });
+          }
+        }
+      }
+      setInProgressCourses(coursesInProgress);
     } catch (error) {
       console.error('Error loading dashboard:', error);
     } finally {
@@ -100,13 +120,47 @@ export default function LearningDashboard({ userId }: LearningDashboardProps) {
           <div className="bg-slate-800 rounded-xl p-6 border border-slate-700">
             <h3 className="text-white font-semibold mb-4">Quick Stats</h3>
             <div className="space-y-4">
+              <StatItem icon={<Star className="w-5 h-5 text-yellow-400" />} label="Total Stars" value={totalStars} />
               <StatItem icon={<Flame className="w-5 h-5 text-orange-400" />} label="Day Streak" value={progress?.streak_days || 0} />
               <StatItem icon={<Code2 className="w-5 h-5 text-green-400" />} label="Challenges" value={progress?.challenges_completed || 0} />
-              <StatItem icon={<BookOpen className="w-5 h-5 text-blue-400" />} label="Lessons" value={progress?.lessons_completed || 0} />
               <StatItem icon={<Award className="w-5 h-5 text-yellow-400" />} label="Badges" value={badges.length} />
             </div>
           </div>
         </div>
+
+        {inProgressCourses.length > 0 && (
+          <div className="bg-gradient-to-r from-purple-600 to-blue-600 rounded-xl p-6 mb-8">
+            <h3 className="text-white font-semibold text-lg mb-4 flex items-center gap-2">
+              <Play className="w-5 h-5" />
+              Resume Your Learning Journey
+            </h3>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {inProgressCourses.slice(0, 2).map(({ course, progress: courseProgress }) => (
+                <div
+                  key={course.id}
+                  className="bg-white/10 backdrop-blur rounded-lg p-4 hover:bg-white/20 transition-all cursor-pointer"
+                >
+                  <h4 className="text-white font-medium mb-2">{course.course_name}</h4>
+                  <div className="flex items-center gap-3 mb-3 text-sm text-white/80">
+                    <span>Level {courseProgress.current_level_number}/10</span>
+                    <span>•</span>
+                    <span>{courseProgress.completion_percentage}% Complete</span>
+                  </div>
+                  <div className="h-2 bg-white/20 rounded-full overflow-hidden mb-3">
+                    <div
+                      className="h-full bg-white rounded-full transition-all"
+                      style={{ width: `${courseProgress.completion_percentage}%` }}
+                    />
+                  </div>
+                  <button className="flex items-center gap-2 text-white font-medium hover:underline">
+                    <Play className="w-4 h-4" />
+                    Continue Learning
+                  </button>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
           <div className="bg-slate-800 rounded-xl p-6 border border-slate-700">

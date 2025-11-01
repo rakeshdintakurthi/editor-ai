@@ -5,9 +5,10 @@ import { gamificationService, CareerTrack, Course, Lesson } from '../lib/gamific
 interface LearningLibraryProps {
   userId: string;
   onSelectLesson?: (lessonId: string) => void;
+  onSelectCourse?: (courseId: string) => void;
 }
 
-export default function LearningLibrary({ userId, onSelectLesson }: LearningLibraryProps) {
+export default function LearningLibrary({ userId, onSelectLesson, onSelectCourse }: LearningLibraryProps) {
   const [tracks, setTracks] = useState<CareerTrack[]>([]);
   const [selectedTrack, setSelectedTrack] = useState<CareerTrack | null>(null);
   const [courses, setCourses] = useState<Course[]>([]);
@@ -158,16 +159,27 @@ export default function LearningLibrary({ userId, onSelectLesson }: LearningLibr
             {selectedCourse ? (
               <>
                 <div className="mb-6">
-                  <h1 className="text-3xl font-bold text-white mb-2">{selectedCourse.course_name}</h1>
-                  <p className="text-slate-400 mb-4">{selectedCourse.description}</p>
-                  <div className="flex items-center gap-4 text-sm">
-                    <span className={`px-3 py-1 rounded-full capitalize ${difficultyColors[selectedCourse.difficulty as keyof typeof difficultyColors]}`}>
-                      {selectedCourse.difficulty}
-                    </span>
-                    <span className="text-slate-400 flex items-center gap-1">
-                      <Clock className="w-4 h-4" />
-                      {selectedCourse.estimated_hours} hours
-                    </span>
+                  <div className="flex items-start justify-between mb-4">
+                    <div className="flex-1">
+                      <h1 className="text-3xl font-bold text-white mb-2">{selectedCourse.course_name}</h1>
+                      <p className="text-slate-400 mb-4">{selectedCourse.description}</p>
+                      <div className="flex items-center gap-4 text-sm">
+                        <span className={`px-3 py-1 rounded-full capitalize ${difficultyColors[selectedCourse.difficulty as keyof typeof difficultyColors]}`}>
+                          {selectedCourse.difficulty}
+                        </span>
+                        <span className="text-slate-400 flex items-center gap-1">
+                          <Clock className="w-4 h-4" />
+                          {selectedCourse.estimated_hours} hours
+                        </span>
+                      </div>
+                    </div>
+                    <button
+                      onClick={() => onSelectCourse && onSelectCourse(selectedCourse.id)}
+                      className="px-6 py-3 bg-blue-600 hover:bg-blue-500 text-white rounded-lg font-medium transition-colors flex items-center gap-2"
+                    >
+                      <Play className="w-4 h-4" />
+                      View Full Course
+                    </button>
                   </div>
                 </div>
 

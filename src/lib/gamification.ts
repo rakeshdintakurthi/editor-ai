@@ -148,6 +148,139 @@ export interface ChallengeSubmission {
   created_at: string;
 }
 
+export interface CourseLevel {
+  id: string;
+  course_id: string;
+  level_number: number;
+  level_name: string;
+  level_description?: string;
+  xp_required: number;
+  unlock_criteria?: any;
+  order_index: number;
+  created_at: string;
+}
+
+export interface LevelModule {
+  id: string;
+  level_id: string;
+  module_number: number;
+  module_title: string;
+  module_description?: string;
+  module_type: string;
+  content?: any;
+  estimated_minutes: number;
+  xp_reward: number;
+  is_required: boolean;
+  order_index: number;
+  created_at: string;
+}
+
+export interface ModuleCompletion {
+  id: string;
+  user_id: string;
+  module_id: string;
+  completed: boolean;
+  score?: number;
+  time_spent_minutes: number;
+  attempts: number;
+  completed_at?: string;
+  created_at: string;
+}
+
+export interface UserCourseProgress {
+  id: string;
+  user_id: string;
+  course_id: string;
+  current_level_number: number;
+  current_module_id?: string;
+  total_modules_completed: number;
+  total_xp_earned: number;
+  completion_percentage: number;
+  last_accessed_at: string;
+  started_at: string;
+  completed_at?: string;
+  certificate_id?: string;
+  created_at: string;
+}
+
+export interface CourseMaterial {
+  id: string;
+  module_id: string;
+  material_type: string;
+  title: string;
+  description?: string;
+  url?: string;
+  file_size_kb?: number;
+  duration_minutes?: number;
+  thumbnail_url?: string;
+  content_data?: any;
+  order_index: number;
+  is_required: boolean;
+  created_at: string;
+}
+
+export interface MaterialProgress {
+  id: string;
+  user_id: string;
+  material_id: string;
+  viewed: boolean;
+  progress_percentage: number;
+  time_spent_minutes: number;
+  last_position: number;
+  completed: boolean;
+  completed_at?: string;
+  created_at: string;
+}
+
+export interface CourseCertificate {
+  id: string;
+  user_id: string;
+  course_id: string;
+  certificate_number: string;
+  course_name: string;
+  completion_date: string;
+  total_xp_earned: number;
+  final_score?: number;
+  hours_spent?: number;
+  issued_at: string;
+  verification_url?: string;
+  certificate_data?: any;
+  created_at: string;
+}
+
+export interface UserStar {
+  id: string;
+  user_id: string;
+  star_category: string;
+  star_count: number;
+  reason?: string;
+  awarded_at: string;
+  created_at: string;
+}
+
+export interface ChatSession {
+  id: string;
+  user_id: string;
+  module_id?: string;
+  session_type: string;
+  topic?: string;
+  language?: string;
+  status: string;
+  created_at: string;
+  ended_at?: string;
+}
+
+export interface ChatMessage {
+  id: string;
+  session_id: string;
+  sender_type: string;
+  message_content: string;
+  code_snippet?: string;
+  language?: string;
+  message_metadata?: any;
+  created_at: string;
+}
+
 export const gamificationService = {
   // User Profile Management
   async createProfile(userId: string, username: string, profile: Partial<UserProfile>): Promise<UserProfile> {
@@ -587,5 +720,368 @@ export const gamificationService = {
     const { data, error } = await query;
     if (error) throw error;
     return data || [];
+  },
+
+  // Course Levels & Modules
+  async getCourseLevels(courseId: string): Promise<CourseLevel[]> {
+    const { data, error } = await supabase
+      .from('course_levels')
+      .select('*')
+      .eq('course_id', courseId)
+      .order('level_number', { ascending: true });
+    if (error) throw error;
+    return data || [];
+  },
+
+  async getCourseLevel(levelId: string): Promise<CourseLevel | null> {
+    const { data, error } = await supabase
+      .from('course_levels')
+      .select('*')
+      .eq('id', levelId)
+      .maybeSingle();
+    if (error) throw error;
+    return data;
+  },
+
+  async getLevelModules(levelId: string): Promise<LevelModule[]> {
+    const { data, error } = await supabase
+      .from('level_modules')
+      .select('*')
+      .eq('level_id', levelId)
+      .order('order_index', { ascending: true });
+    if (error) throw error;
+    return data || [];
+  },
+
+  async getModule(moduleId: string): Promise<LevelModule | null> {
+    const { data, error } = await supabase
+      .from('level_modules')
+      .select('*')
+      .eq('id', moduleId)
+      .maybeSingle();
+    if (error) throw error;
+    return data;
+  },
+
+  async completeModule(userId: string, moduleId: string, score?: number, timeSpent?: number): Promise<void> {
+    const module = await this.getModule(moduleId);
+    if (!module) return;
+
+    await supabase
+      .from('module_completions')
+      .upsert({
+        user_id: userId,
+        module_id: moduleId,
+        completed: true,
+        score,
+        time_spent_minutes: timeSpent || 0,
+        completed_at: new Date().toISOString(),
+      });
+
+    await this.addXP(userId, module.xp_reward);
+    await this.updateStreak(userId);
+    await this.updateCourseProgress(userId, moduleId);
+  },
+
+  async getModuleCompletion(userId: string, moduleId: string): Promise<ModuleCompletion | null> {
+    const { data, error } = await supabase
+      .from('module_completions')
+      .select('*')
+      .eq('user_id', userId)
+      .eq('module_id', moduleId)
+      .maybeSingle();
+    if (error) throw error;
+    return data;
+  },
+
+  // User Course Progress & Journey
+  async getUserCourseProgress(userId: string, courseId: string): Promise<UserCourseProgress | null> {
+    const { data, error } = await supabase
+      .from('user_course_progress')
+      .select('*')
+      .eq('user_id', userId)
+      .eq('course_id', courseId)
+      .maybeSingle();
+    if (error) throw error;
+    return data;
+  },
+
+  async startCourse(userId: string, courseId: string): Promise<UserCourseProgress> {
+    const { data, error } = await supabase
+      .from('user_course_progress')
+      .insert({
+        user_id: userId,
+        course_id: courseId,
+        current_level_number: 1,
+      })
+      .select()
+      .single();
+    if (error) throw error;
+    return data;
+  },
+
+  async updateCourseProgress(userId: string, currentModuleId: string): Promise<void> {
+    const module = await this.getModule(currentModuleId);
+    if (!module) return;
+
+    const level = await this.getCourseLevel(module.level_id);
+    if (!level) return;
+
+    const progress = await this.getUserCourseProgress(userId, level.course_id);
+    if (!progress) return;
+
+    const completedModules = await supabase
+      .from('module_completions')
+      .select('id')
+      .eq('user_id', userId)
+      .eq('completed', true);
+
+    const totalModules = await supabase
+      .from('level_modules')
+      .select('id')
+      .eq('level_id', module.level_id);
+
+    const completionPercentage = totalModules.data
+      ? (completedModules.data?.length || 0) / totalModules.data.length * 100
+      : 0;
+
+    await supabase
+      .from('user_course_progress')
+      .update({
+        current_level_number: level.level_number,
+        current_module_id: currentModuleId,
+        total_modules_completed: completedModules.data?.length || 0,
+        completion_percentage: Math.round(completionPercentage),
+        last_accessed_at: new Date().toISOString(),
+      })
+      .eq('user_id', userId)
+      .eq('course_id', level.course_id);
+
+    if (level.level_number === 10 && completionPercentage === 100) {
+      await this.generateCertificate(userId, level.course_id);
+    }
+  },
+
+  async resumeCourse(userId: string, courseId: string): Promise<{ level: CourseLevel | null; module: LevelModule | null }> {
+    const progress = await this.getUserCourseProgress(userId, courseId);
+    if (!progress || !progress.current_module_id) {
+      return { level: null, module: null };
+    }
+
+    const module = await this.getModule(progress.current_module_id);
+    const level = module ? await this.getCourseLevel(module.level_id) : null;
+
+    return { level, module };
+  },
+
+  // Course Materials
+  async getMaterialsByModule(moduleId: string): Promise<CourseMaterial[]> {
+    const { data, error } = await supabase
+      .from('course_materials')
+      .select('*')
+      .eq('module_id', moduleId)
+      .order('order_index', { ascending: true });
+    if (error) throw error;
+    return data || [];
+  },
+
+  async getMaterial(materialId: string): Promise<CourseMaterial | null> {
+    const { data, error } = await supabase
+      .from('course_materials')
+      .select('*')
+      .eq('id', materialId)
+      .maybeSingle();
+    if (error) throw error;
+    return data;
+  },
+
+  async updateMaterialProgress(
+    userId: string,
+    materialId: string,
+    progressPercentage: number,
+    timeSpent?: number
+  ): Promise<void> {
+    await supabase
+      .from('material_progress')
+      .upsert({
+        user_id: userId,
+        material_id: materialId,
+        viewed: progressPercentage > 0,
+        progress_percentage: progressPercentage,
+        time_spent_minutes: timeSpent || 0,
+        completed: progressPercentage >= 100,
+        completed_at: progressPercentage >= 100 ? new Date().toISOString() : null,
+      });
+  },
+
+  async getMaterialProgress(userId: string, materialId: string): Promise<MaterialProgress | null> {
+    const { data, error } = await supabase
+      .from('material_progress')
+      .select('*')
+      .eq('user_id', userId)
+      .eq('material_id', materialId)
+      .maybeSingle();
+    if (error) throw error;
+    return data;
+  },
+
+  // Certificates
+  async generateCertificate(userId: string, courseId: string): Promise<CourseCertificate> {
+    const course = await this.getCourse(courseId);
+    if (!course) throw new Error('Course not found');
+
+    const progress = await this.getUserCourseProgress(userId, courseId);
+    if (!progress) throw new Error('Course progress not found');
+
+    const certificateNumber = `CERT-${Date.now()}-${userId.substring(0, 8)}`;
+
+    const { data, error } = await supabase
+      .from('course_certificates')
+      .insert({
+        user_id: userId,
+        course_id: courseId,
+        certificate_number: certificateNumber,
+        course_name: course.course_name,
+        total_xp_earned: progress.total_xp_earned,
+        verification_url: `https://example.com/verify/${certificateNumber}`,
+      })
+      .select()
+      .single();
+
+    if (error) throw error;
+
+    await supabase
+      .from('user_course_progress')
+      .update({
+        completed_at: new Date().toISOString(),
+        certificate_id: data.id,
+      })
+      .eq('user_id', userId)
+      .eq('course_id', courseId);
+
+    await this.awardStar(userId, 'course_completion', 1, `Completed ${course.course_name}`);
+
+    return data;
+  },
+
+  async getUserCertificates(userId: string): Promise<CourseCertificate[]> {
+    const { data, error } = await supabase
+      .from('course_certificates')
+      .select('*')
+      .eq('user_id', userId)
+      .order('issued_at', { ascending: false });
+    if (error) throw error;
+    return data || [];
+  },
+
+  // Stars
+  async awardStar(userId: string, category: string, count: number, reason?: string): Promise<UserStar> {
+    const { data, error } = await supabase
+      .from('user_stars')
+      .insert({
+        user_id: userId,
+        star_category: category,
+        star_count: count,
+        reason,
+      })
+      .select()
+      .single();
+    if (error) throw error;
+    return data;
+  },
+
+  async getUserStars(userId: string): Promise<UserStar[]> {
+    const { data, error } = await supabase
+      .from('user_stars')
+      .select('*')
+      .eq('user_id', userId)
+      .order('awarded_at', { ascending: false });
+    if (error) throw error;
+    return data || [];
+  },
+
+  async getTotalStars(userId: string): Promise<number> {
+    const { data, error } = await supabase
+      .from('user_stars')
+      .select('star_count')
+      .eq('user_id', userId);
+    if (error) throw error;
+    return data?.reduce((sum, star) => sum + star.star_count, 0) || 0;
+  },
+
+  // Chat Sessions
+  async createChatSession(userId: string, moduleId?: string, sessionType?: string): Promise<ChatSession> {
+    const { data, error } = await supabase
+      .from('chat_sessions')
+      .insert({
+        user_id: userId,
+        module_id: moduleId,
+        session_type: sessionType || 'general',
+      })
+      .select()
+      .single();
+    if (error) throw error;
+    return data;
+  },
+
+  async getChatSession(sessionId: string): Promise<ChatSession | null> {
+    const { data, error } = await supabase
+      .from('chat_sessions')
+      .select('*')
+      .eq('id', sessionId)
+      .maybeSingle();
+    if (error) throw error;
+    return data;
+  },
+
+  async getUserChatSessions(userId: string): Promise<ChatSession[]> {
+    const { data, error } = await supabase
+      .from('chat_sessions')
+      .select('*')
+      .eq('user_id', userId)
+      .eq('status', 'active')
+      .order('created_at', { ascending: false });
+    if (error) throw error;
+    return data || [];
+  },
+
+  async addChatMessage(
+    sessionId: string,
+    senderType: string,
+    messageContent: string,
+    codeSnippet?: string
+  ): Promise<ChatMessage> {
+    const { data, error } = await supabase
+      .from('chat_messages')
+      .insert({
+        session_id: sessionId,
+        sender_type: senderType,
+        message_content: messageContent,
+        code_snippet: codeSnippet,
+      })
+      .select()
+      .single();
+    if (error) throw error;
+    return data;
+  },
+
+  async getChatMessages(sessionId: string): Promise<ChatMessage[]> {
+    const { data, error } = await supabase
+      .from('chat_messages')
+      .select('*')
+      .eq('session_id', sessionId)
+      .order('created_at', { ascending: true });
+    if (error) throw error;
+    return data || [];
+  },
+
+  async endChatSession(sessionId: string): Promise<void> {
+    await supabase
+      .from('chat_sessions')
+      .update({
+        status: 'archived',
+        ended_at: new Date().toISOString(),
+      })
+      .eq('id', sessionId);
   },
 };

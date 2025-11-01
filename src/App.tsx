@@ -8,11 +8,13 @@ import Leaderboard from './components/Leaderboard';
 import LearningLibrary from './components/LearningLibrary';
 import UserProfile from './components/UserProfile';
 import ChallengeView from './components/ChallengeView';
+import CourseDetailView from './components/CourseDetailView';
+import ChatAssistantWidget from './components/ChatAssistantWidget';
 import { db } from './lib/database';
 import { isMock } from './lib/supabase';
 import { gamificationService } from './lib/gamification';
 
-type View = 'editor' | 'dashboard' | 'settings' | 'learn' | 'leaderboard' | 'library' | 'profile' | 'challenge';
+type View = 'editor' | 'dashboard' | 'settings' | 'learn' | 'leaderboard' | 'library' | 'profile' | 'challenge' | 'course';
 
 function App() {
   const [currentView, setCurrentView] = useState<View>('learn');
@@ -21,6 +23,7 @@ function App() {
   const [code, setCode] = useState<string>('// Start typing your code here...\n');
   const [userId, setUserId] = useState<string>('demo-user-123');
   const [selectedChallengeId, setSelectedChallengeId] = useState<string>('');
+  const [selectedCourseId, setSelectedCourseId] = useState<string>('');
 
   useEffect(() => {
     initializeSession();
@@ -238,6 +241,20 @@ function App() {
               setSelectedChallengeId(lessonId);
               setCurrentView('challenge');
             }}
+            onSelectCourse={(courseId) => {
+              setSelectedCourseId(courseId);
+              setCurrentView('course');
+            }}
+          />
+        )}
+        {currentView === 'course' && selectedCourseId && (
+          <CourseDetailView
+            courseId={selectedCourseId}
+            userId={userId}
+            onModuleSelect={(moduleId) => {
+              console.log('Selected module:', moduleId);
+            }}
+            onClose={() => setCurrentView('library')}
           />
         )}
         {currentView === 'leaderboard' && <Leaderboard />}
@@ -261,6 +278,8 @@ function App() {
         {currentView === 'dashboard' && <Dashboard />}
         {currentView === 'settings' && <Settings />}
       </main>
+
+      <ChatAssistantWidget userId={userId} />
     </div>
   );
 }
